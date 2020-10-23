@@ -104,4 +104,54 @@ Similar machines, similar code
 Catastrophic failure
 \end{frame}
 
+\begin{frame}
+\frametitle{TLS Handshake}
+
+TBD
+
+\end{frame}
+
+\begin{frame}
+\frametitle{TLS Auth Failures}
+
+Post-date handshake
+
+\end{frametitle}
+
+\begin{frame}
+\frametitle{Relevant Cert}
+
+Last one
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Prometheus Exporter}
+
+\begin{lstlisting}
+def metrics(request):
+    cert = get_cert(HOST, PORT)
+    days = (datetime.now() -
+            cert.not_valid_after)/timedelta(days=1)
+    reg = CollectorRegistry()
+    metric = Gauge("days_left", registry=reg)
+    metric.set(days)
+    return Response(generate_latest(reg), CONTENT_TYPE_LATEST)
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}
+\frametitle{StatsD}
+
+\begin{lstlisting}
+while True:
+    cert = get_cert(HOST, PORT)
+    days = (datetime.now() -
+            cert.not_valid_after)/timedelta(days=1)
+    statsd.gauge("days_left", days)
+    time.sleep(60)
+\end{lstlisting}
+\end{frame}
+
+
 \end{document}
