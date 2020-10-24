@@ -107,8 +107,37 @@ Catastrophic failure
 \begin{frame}
 \frametitle{TLS Handshake}
 
-TBD
+\begin{lstlisting}
+def _make_loose_context(store_cert):
+    ret = SSL.Context(SSL.SSLv23_METHOD
+    ret.check_hostname = False
+    def callback(conn, cert, *args):
+        store_cert(cert)
+        return Tru
+    ret.set_verify(SSL.VERIFY_NONE, callback)
+    return ret
+\end{lstlisting}
+\end{frame}
 
+\begin{frame}
+\frametitle{TLS Handshake}
+\begin{lstlisting}
+    for i in range(100):
+        try:
+            sock_ssl.do_handshake()
+        except SSL.WantReadError:
+            with contextlib.suppress(SSL.WantReadError):
+                to_send = sock_ssl.bio_read(4096)
+                sock.sendall(to_send)
+            read_bytes = sock.recv(4096)
+            if len(read_bytes) == 0:
+                break
+            sock_ssl.bio_write(read_bytes)
+        except SSL.Error as err:
+            break
+        else:
+            break
+\end{lstlisting}
 \end{frame}
 
 \begin{frame}
