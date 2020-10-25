@@ -104,55 +104,125 @@ Similar machines, similar code
 Catastrophic failure
 \end{frame}
 
-\begin{frame}[fragile]
-\frametitle{TLS Handshake}
+\begin{frame}
+\frametitle{Goal: Validity Time}
 
+NOT:
+
+\begin{itemize}
+\item Security tool
+\item Check correct signature
+\item Check valid CA
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Comfort with Low-level TLS}
+
+Uncommon goals: specialized tools
+\end{frame}
+
+\begin{frame}
+\frametitle{TLS Auth Failures}
+Post-date handshake
+\end{frame}
+
+\begin{frame}
+\frametitle{Relevant Cert}
+Last one
+\end{frame}
+
+\begin{frame}
+\frametitle{Tool: Python PyOpenSSL}
+
+\begin{itemize}
+\item Built-in SSL too high-level
+\item cryptography too low-level
+\item Sans-IO
+\item 1:1 OpenSSL API
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{TLS Handshake: Step}
 \begin{lstlisting}
-def _make_loose_context(store_cert):
-    ret = SSL.Context(SSL.SSLv23_METHOD
+def handshake_step(sock, sock_ssl):
+    try:
+        sock_ssl.do_handshake()
+    except WantReadError:
+        with suppress(WantReadError):
+            to_send = sock_ssl.bio_read(4096)
+            sock.sendall(to_send)
+        read_bytes = sock.recv(4096)
+        if len(read_bytes) == 0: break
+        sock_ssl.bio_write(read_bytes)
+    except SSL.Error as err: break
+    else: break
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{TLS: Context}
+\begin{lstlisting}
+def permissive_ctx(certs):
+    ret = SSL.Context(SSL.SSLv23_METHOD)
     ret.check_hostname = False
     def callback(conn, cert, *args):
-        store_cert(cert)
-        return Tru
+        certs.append(cert)
+        return True
     ret.set_verify(SSL.VERIFY_NONE, callback)
     return ret
 \end{lstlisting}
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{TLS Handshake}
+\frametitle{TLS Handshake: Loop}
 \begin{lstlisting}
+def get_cert_from_sock(sock): 
+    certs = []
+    ctx = permissive_ctx(certs)
+    sock_ssl = Connection(ctx, None)
     for i in range(100):
-        try:
-            sock_ssl.do_handshake()
-        except SSL.WantReadError:
-            with contextlib.suppress(SSL.WantReadError):
-                to_send = sock_ssl.bio_read(4096)
-                sock.sendall(to_send)
-            read_bytes = sock.recv(4096)
-            if len(read_bytes) == 0:
-                break
-            sock_ssl.bio_write(read_bytes)
-        except SSL.Error as err:
-            break
-        else:
-            break
+        handshake_step(
+            sock,
+            sock_ssl
+        )
+    # Ignore errors for now
+    return certs[-1].to_cryptography()
 \end{lstlisting}
 \end{frame}
 
-\begin{frame}
-\frametitle{TLS Auth Failures}
-
-Post-date handshake
-
-\end{frametitle}
-
-\begin{frame}
-\frametitle{Relevant Cert}
-
-Last one
-
+\begin{frame}[fragile]
+\frametitle{TLS Handshake: Networking}
+\begin{lstlisting}
+def make_socket(host, port):
+    sock = socket.socket()
+    sock.settimeout(1)
+    sock.connect((host, port))
+    return sock
+\end{lstlisting}
 \end{frame}
+
+\begin{frame}[fragile]
+\frametitle{TLS Handshake: Combining}
+\begin{lstlisting}
+def get_cert(host, port):
+    sock = make_socket(host, port)
+    return get_cert_from_socket(sock)
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Calculate Validity}
+
+\begin{lstlisting}
+def days_left(cert):
+    return (datetime.now() -
+            cert.not_valid_after)/timedelta(days=1)
+\end{lstlisting}
+\end{frame}
+
 
 \begin{frame}[fragile]
 \frametitle{Prometheus Exporter}
@@ -160,12 +230,11 @@ Last one
 \begin{lstlisting}
 def metrics(request):
     cert = get_cert(HOST, PORT)
-    days = (datetime.now() -
-            cert.not_valid_after)/timedelta(days=1)
     reg = CollectorRegistry()
     metric = Gauge("days_left", registry=reg)
-    metric.set(days)
-    return Response(generate_latest(reg), CONTENT_TYPE_LATEST)
+    metric.set(days_left(cert))
+    content = generate_latest(reg)
+    return Response(content, CONTENT_TYPE_LATEST)
 \end{lstlisting}
 \end{frame}
 
@@ -175,9 +244,7 @@ def metrics(request):
 \begin{lstlisting}
 while True:
     cert = get_cert(HOST, PORT)
-    days = (datetime.now() -
-            cert.not_valid_after)/timedelta(days=1)
-    statsd.gauge("days_left", days)
+    statsd.gauge("days_left", days_left(cert))
     time.sleep(60)
 \end{lstlisting}
 \end{frame}
@@ -191,16 +258,13 @@ and these ones are watching paint dry.
 \end{frame}
 
 \begin{frame}
-\frametitle{Validitiy}
+\frametitle{Parameters}
 
-30-90
-
-\end{frame}
-
-\begin{frame}
-\frametitle{Rotation Period}
-
-Expected range
+\begin{itemize}
+\item Input: Validity: 7-90\pause
+\item Input: Rotation period: 1-45\pause
+\item Output: Expected range
+\end{itemize}
 
 \end{frame}
 
