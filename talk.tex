@@ -147,18 +147,19 @@ Last one
 \begin{frame}[fragile]
 \frametitle{TLS Handshake: Step}
 \begin{lstlisting}
-def handshake_step(sock, sock_ssl):
-    try:
-        sock_ssl.do_handshake()
-    except WantReadError:
-        with suppress(WantReadError):
-            to_send = sock_ssl.bio_read(4096)
-            sock.sendall(to_send)
-        read_bytes = sock.recv(4096)
-        if len(read_bytes) == 0: break
-        sock_ssl.bio_write(read_bytes)
-    except SSL.Error as err: break
-    else: break
+def handshake_loop(sock, sock_ssl):
+    for i in range(100):
+        try:
+            sock_ssl.do_handshake()
+        except WantReadError:
+            with suppress(WantReadError):
+                to_send = sock_ssl.bio_read(4096)
+                sock.sendall(to_send)
+            read_bytes = sock.recv(4096)
+            if len(read_bytes) == 0: break
+            sock_ssl.bio_write(read_bytes)
+        except SSL.Error as err: break
+        else: break
 \end{lstlisting}
 \end{frame}
 
@@ -183,11 +184,7 @@ def get_cert_from_sock(sock):
     certs = []
     ctx = permissive_ctx(certs)
     sock_ssl = Connection(ctx, None)
-    for i in range(100):
-        handshake_step(
-            sock,
-            sock_ssl
-        )
+    handshake_loop(sock, sock_ssl)
     # Ignore errors for now
     return certs[-1].to_cryptography()
 \end{lstlisting}
