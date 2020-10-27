@@ -215,8 +215,8 @@ def get_cert(host, port):
 
 \begin{lstlisting}
 def days_left(cert):
-    return (datetime.now() -
-            cert.not_valid_after)/timedelta(days=1)
+    delta = cert.not_valid_after - now()
+    return delta / timedelta(days=1)
 \end{lstlisting}
 \end{frame}
 
